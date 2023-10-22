@@ -1,0 +1,15 @@
+universe = vanilla
+executable = /home/krish.shah//GW_Lensing/FF_Computation/NEW_FF/SP/FF_SP_OVP.py
+
+accounting_group = iucaa.test2
+accounting_group_user = krish.shah
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+getenv =  True
+
+arguments = $(ProcId)
+log = logs/$(ProcId).log
+output = logs/$(ProcId).out
+error = logs/$(ProcId).err
+queue 50

@@ -1,0 +1,15 @@
+universe = vanilla
+executable = /home/krish.shah/GW_Lensing/FF_Computation/FF_2params.py
+
+accounting_group = iucaa.test2
+accounting_group_user = krish.shah
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+getenv =  True
+
+
+log = logs/HM.log
+output = logs/HM.out
+error = logs/HM.err
+queue 1

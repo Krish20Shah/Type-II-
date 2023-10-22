@@ -1,0 +1,15 @@
+universe = vanilla
+executable = /home/krish.shah/GW_Lensing/FF_Computation/FF_2params_spin_precession.py
+
+accounting_group = iucaa.test2
+accounting_group_user = krish.shah
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+getenv =  True
+
+
+log = logs/SP.log
+output = logs/SP.out
+error = logs/SP.err
+queue 1

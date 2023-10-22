@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/var/lib/condor/execute/dir_6675/condor_exec.exe", line 68, in <module>
+    plt.scatter(coordinates[:, 0], coordinates[:, 1], c=FF_MV_IQ.flatten(), cmap='plasma_r')
+IndexError: too many indices for array: array is 1-dimensional, but 2 were indexed
