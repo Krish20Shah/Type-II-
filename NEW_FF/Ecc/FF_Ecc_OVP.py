@@ -318,49 +318,66 @@ def modes_to_k(modes):
     return [int(x[0]*(x[0]-1)/2 + x[1] -2) for x in modes]
 
 def overlap_wfs(rec,wf):
+    """
+    This function optimises the match/overlap by shifting the waveforms in time.
+    """
+
     rec = rec
     wf = wf    
     x0 = 0
+    #Minimizing (1 - overlap) using scipy optimize and nelder mead    
     vals = scipy.optimize.minimize(optimse_func_2, x0, args=(wf,rec),method='Nelder-Mead',options = {'xatol': 1e-5})   
-    #print(vals.fun)
+    # Returning the best match which will be taken as another agument to maximise over.
     return 1 - vals.fun
 
 def optimse_func_2(x, *args):
+
+    """
+    This function calculates the overlap by shifting the waveform in time.
+    """    
     wf, rec = deepcopy(args[0]), deepcopy(args[1])
-    #print(rec.delta_t)
     t_c = x[0]
-    t_c = dom_x(t_c,x_min= rec.delta_t)
-    rec_shift = cyclic_time_shift_of_WF(rec,rwrap = t_c)
+    t_c = dom_x(t_c,x_min= rec.delta_t) #So that the shift is not to small
+    rec_shift = cyclic_time_shift_of_WF(rec,rwrap = t_c) #Shifts wf in time domain as Teobresums time domain generation works
     overlap = pycbc.filter.matchedfilter.overlap(wf, rec_shift, low_frequency_cutoff=20, high_frequency_cutoff=None, normalized=True)    
-    #print(1-overlap)
+    #We return 1- overlap so that it can be used further to minimize.
     return 1-overlap
 
 def objective_wf(x,*args):
+    """
+    Here we have the objective function where we optimise over intrinsic parameters.
+    In this case over Mtotal, q, coa_phase,eccentricity
+    """
+
+
     x[0], x[1] = dom_m(x[0]), dom_q(x[1])
     x[2] = dom_ecc(x[2])
     Mt, q = x[0],x[1]
     phi_c = x[3]
     
     prms = Mt , q, x[2], phi_c
+    #Variables are the parameters on which we want to maximize match over.
+    #This fucntion is used in compute_FF as function whose return value we want to maximize
 
     wf , kwargs = args
     rec = gen_wf(prms,**kwargs)
     wavef, recov = deepcopy(wf), deepcopy(rec)
 
+    #Resizing so there is no length error between data and template.
     tlen = max(len(wavef), len(recov))
     wavef.resize(tlen)
     recov.resize(tlen)
-
+    #We return 1- overlap so that it can be used further to minimize.
     return 1 - overlap_wfs(recov,wavef)
 
 def gen_wf(prms,**kwargs ):
-
+    """
+    Generating waveforms based on the parameters of every iteration.
+    """
     Mt , q, ecc, phi_c = prms
-    
-    #print(prms)
+
     f_low=20
-    #k = [1]
-    #print(prms)
+
     shifted_pars = {
         'M'                  : Mt,
         'q'                  : q,
@@ -383,28 +400,39 @@ def gen_wf(prms,**kwargs ):
         }  
     t, hp, hc = EOBRun_module.EOBRunPy(shifted_pars)
     merg = np.argmax(hp)
-    t -= t[merg]
+    t -= t[merg] #So that merge happens at t=0
     rec = pycbc.types.timeseries.TimeSeries(hp,delta_t=t[1]-t[0],epoch=t[0])
 
     return rec
    
 def gen_seed(Mtot,q,eccentricity,sigma_Mt=0.1,sigma_q = 0.01,sigma_ecc=0.02):
-
+    """
+    generating seed parameters : The initial parameters that we start our scipy run with.
+    """
     Mtot_inj = np.random.normal(Mtot, sigma_Mt, 1)[0]
     q_inj = np.random.normal(q, sigma_q, 1)[0]
     ecc = np.random.normal(eccentricity, sigma_ecc, 1)[0]
     return[dom_m(Mtot_inj), dom_q(q_inj), dom_ecc(ecc)]
 
 def compute_FF(signal,**kwargs):
+
+    """
+    The main function where we calculate max FF value using scipy and iterating over the intrinsic parameters.
+    """
+
     Mtot, q, eccentricity = kwargs['mt_inj'], kwargs['q_inj'], kwargs['ecc']
     seed_params = gen_seed(Mtot,q,eccentricity = eccentricity)
-    #print(seed_params)
-    x0 = [seed_params[0],seed_params[1],seed_params[2],-0.01]
-    #print(x0)
+    
+    x0 = [seed_params[0],seed_params[1],seed_params[2],-0.01] #Coa_Phase param self given
+    
     tmp_sig = deepcopy(signal)
     FF =  scipy.optimize.minimize(objective_wf, x0, args=(tmp_sig,kwargs), method='Nelder-Mead',options = {'xatol': 1e-7})   
     return [(1 - FF.fun),list(FF.x)]
 
+#####################
+# Injection 
+
+#Loading eccentricity and Mtotal value on whose parameter space I want to find the trend.
 ID = int(sys.argv[1])
 ecc_mt_load = np.loadtxt('/home/krish.shah/GW_Lensing/FF_Computation/NEW_FF/Ecc/ecc_mt.txt')
 e_inj,mt_inj = ecc_mt_load[ID]
@@ -414,7 +442,7 @@ l_inj = np.pi/3
 #mt_inj = 50
 #e_inj = 0.2
 f_low =20
-k_inj = modes_to_k([[2,1],[2,2],[3,2],[3,3]])
+k_inj = modes_to_k([[2,1],[2,2],[3,2],[3,3]]) #modes to k is fucntion used to change our l and m modes to k for input in teobresums
 inj_pars = {
     'M'                  : mt_inj,
     'q'                  : q_inj,
@@ -441,12 +469,20 @@ t1, hp1, hc1 = EOBRun_module.EOBRunPy(inj_pars)
 merg = np.argmax(hp1)
 t1 -= t1[merg]
 hpt1 = pycbc.types.timeseries.TimeSeries(hp1,delta_t=t1[1]-t1[0],epoch=t1[0])
-#hpf = hpt1.to_frequencyseries(delta_f=hpt1.delta_f)
-#function = np.sqrt(1.0)*np.exp( -1j*np.pi/2)
-#hpf *= function
-#hpt12 = hpf.to_timeseries(delta_t = hpf.delta_t)
 
+#Lensing Shift
+hpf = hpt1.to_frequencyseries(delta_f=hpt1.delta_f)
+function = np.sqrt(1.0)*np.exp( -1j*np.pi/2)
+hpf *= function
+hpt12 = hpf.to_timeseries(delta_t = hpf.delta_t)
+
+########################
+#Recovery FF
 kwargs = dict(mt_inj = mt_inj, q_inj = q_inj, inclination = l_inj,ecc = e_inj,k = k_inj)
+
+"""
+This is for how many times we want to run our process to obtain the best value of match
+"""
 
 def nruns(niters):
     #FF_value = np.zeros(niters)
@@ -462,4 +498,5 @@ FF_V  = nruns(13)
 FF_V_O = np.array(FF_V,dtype='object')
 FF_V_O = sort_desc(FF_V_O)
 
+#Saves file for every run which has multiple outputs ordered according to max FF and one file for each Sarathi run
 np.savetxt('/home/krish.shah//GW_Lensing/FF_Computation/NEW_FF/Ecc/FF_Values_Ecc__NO_Lensing'+str(e_inj)+'_'+str(mt_inj)+'_'+str(q_inj)+'_'+str(l_inj)+'.txt', FF_V_O,fmt='%s')

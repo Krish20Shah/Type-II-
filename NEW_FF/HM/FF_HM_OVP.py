@@ -244,7 +244,7 @@ def optimse_func_2(x, *args):
     wf, rec = deepcopy(args[0]), deepcopy(args[1]) # wf is the waveform and rec is the recovery waveform which will be shifted.
     t_c = x
     f = rec.sample_frequencies
-    rec *= np.exp(1j*(2*np.pi*f*t_c))
+    rec *= np.exp(1j*(2*np.pi*f*t_c)) #Shifts in time for maximum overlap
     
     overlap = pycbc.filter.matchedfilter.overlap(wf, rec, low_frequency_cutoff=20, high_frequency_cutoff=None, normalized=True)    
     #We return 1- overlap so that it can be used further to minimize.
@@ -252,7 +252,7 @@ def optimse_func_2(x, *args):
 
 def overlap_wfs(rec,wf):
     """
-    This function optimises the match by shifting the waveforms in time.
+    This function optimises the match/overlap by shifting the waveforms in time.
     """
     rec = rec
     wf = wf    
@@ -270,6 +270,8 @@ def objective_wf(x,*args):
     x[0], x[1] = dom_m(x[0]), dom_q(x[1])
     Mt, q = x[0],x[1]
     phi_c = x[2]
+    #Variables are the parameters on which we want to maximize match over.
+    #This fucntion is used in compute_FF as function whose return value we want to maximize
 
     prms = Mt , q, phi_c
 
@@ -280,7 +282,7 @@ def objective_wf(x,*args):
     flen = max(len(wf), len(rec))
     wf.resize(flen)
     rec.resize(flen)
-
+    #We return 1- overlap so that it can be used further to minimize.
     return 1 - overlap_wfs(rec,wf)
 
 def gen_wf(prms,**kwargs ):
@@ -288,7 +290,6 @@ def gen_wf(prms,**kwargs ):
     Generating waveforms based on the parameters of every iteration.
     """
     Mt , q, phi_c = prms
-    #print(prms)
     inj_params = dict(approximant="IMRPhenomXPHM",
                          mass1=Mt * q/ (1 + q), 
                          mass2=Mt  / (1 + q), 
@@ -321,9 +322,9 @@ def compute_FF(signal,**kwargs):
     """
     Mtot = kwargs['mt_inj']
     q = kwargs['q_inj']
-    seed_params = gen_seed(Mtot,q)
+    seed_params = gen_seed(Mtot,q) #Generates seed Parameters
 
-    x0 = [seed_params[0],seed_params[1],-0.5]
+    x0 = [seed_params[0],seed_params[1],-0.5] #Coa_Phase param self given
 
     tmp_sig = deepcopy(signal)
     FF =  scipy.optimize.minimize(objective_wf, x0, args=(tmp_sig,kwargs), method='Nelder-Mead',options = {'xatol': 1e-4})   
@@ -332,13 +333,12 @@ def compute_FF(signal,**kwargs):
 #####################
 # Injection 
 
-ID = int(sys.argv[1])
+#Loading q and Inclination value on whose parameter space I want to find the trend.
+ID = int(sys.argv[1]) #All runs on different process on sarathi
 q_l_load = np.loadtxt('/home/krish.shah/GW_Lensing/FF_Computation/NEW_FF/HM/Q_L_Pair.txt')
 q_inj, l_inj = q_l_load[ID]
 
 mt_inj = 100.0 #Total mass injected
-#q_inj = 1/7 #mass ratio injected
-#l_inj = np.pi/3 #inclination injected
 inj_params = dict(approximant="IMRPhenomXPHM",
                          mass1=mt_inj / (1 + q_inj), 
                          mass2=mt_inj *q_inj  / (1 + q_inj), 
@@ -379,10 +379,14 @@ def nruns(niters):
 
     return FV
 
-FF_V  = nruns(5)
+FF_V  = nruns(5) #5 point maximization
+
 FF_V_O = np.array(FF_V,dtype='object')
 FF_V_O = sort_desc(FF_V_O)
 #print(FF_V_O)
 # np.savetxt('FF_Values_HM_New.txt',FF_V_O)
 #FF_V_O[0,0]
+
+#Saves file for every run which has multiple outputs ordered according to max FF and one file for each Sarathi run
+
 np.savetxt('/home/krish.shah//GW_Lensing/FF_Computation/NEW_FF/HM/FF_Values_HM_'+str(q_inj)+'_'+str(l_inj)+'.txt', FF_V_O,fmt='%s')
